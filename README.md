@@ -527,7 +527,7 @@ execute 函数会解析数据并且根据返回的结果抛出不同的事件，
 }
  ```
  
- 这样如何处理 redis 回复的消息就比较清楚了。再来看看如何处理 redis 连接的各种事件，先看 ready，找到 on_connect 函数
+ 这样如何处理 redis 回复的消息就比较清楚了。再来看看如何处理 redis 连接的各种事件，先看 connect，找到 on_connect 函数
  
  ```js
  RedisClient.prototype.on_connect = function () {
