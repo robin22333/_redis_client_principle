@@ -15,13 +15,13 @@
 
 用 nc 测试各个结果返回的格式如下：
 
-```
+```bash
 $ nc localhost 6379
 ```
 
 1、返回错误
 
-```
+```bash
 haha
 
 -ERR unknown command 'haha'
@@ -29,7 +29,7 @@ haha
 
 2、操作成功
 
-```
+```bash
 auth luobin
 
 +OK
@@ -37,7 +37,7 @@ auth luobin
 
 3、得到结果
 
-```
+```bash
 get foo
 
 $3
@@ -46,7 +46,7 @@ bar
 
 4、没有得到结果
 
-```
+```bash
 get test
 
 $-1
@@ -54,7 +54,7 @@ $-1
 
 5、结果为整型数字
 
-```
+```bash
 hlen user
 
 :4
@@ -62,7 +62,7 @@ hlen user
 
 6、批量结果
 
-```
+```bash
 keys *
 
 *3
@@ -77,7 +77,7 @@ list
 
 7、多命令
 
-```
+```bash
 multi
 
 +OK
@@ -106,7 +106,7 @@ bar
 
 ### 项目依赖
 
-```
+```json
 "dependencies": {
   "double-ended-queue": "^2.1.0-0",
   "redis-commands": "^1.2.0",
@@ -128,7 +128,7 @@ pipeline_queue。offline_queue 是在连接还没有准备好的情况下会将�
 
 首先看 index.js，找到 createClient 函数
 
-```
+```js
 exports.createClient = function () {
     return new RedisClient(unifyOptions.apply(null, arguments));
 };
@@ -136,13 +136,13 @@ exports.createClient = function () {
 
 可以看到这个函数返回了一个 RedisClient 的对象，并且通过 unifyOptions 函数对参数进行了处理，找到 unifyOptions 函数
 
-```
+```js
 var unifyOptions = require('./lib/createClient');
 ```
 
 找到 /lib/createClient.js
 
-```
+```js
 module.exports = function createClient (port_arg, host_arg, options) {
 
     if (typeof port_arg === 'number' || typeof port_arg === 'string' && /^\d+$/.test(port_arg)) {
@@ -163,7 +163,7 @@ module.exports = function createClient (port_arg, host_arg, options) {
 
 这个函数主要对各种情况的参数进行处理，返回统一的 options。
 
-```
+```js
 // 参数的各种情况([] 表示这个参数可以为空)
 redis.createClient([options]) // 走第三条分支
 redis.createClient(unix_socket[, options]) // 走第三条分支
@@ -173,7 +173,7 @@ redis.createClient(port[, host][, options]) // 走第一条分支
 
 再来看 RedisClient 函数，我在关键的参数和代码加了注释
 
-```
+```js
 function RedisClient (options, stream) {
     // 拷贝一份 options
     options = utils.clone(options);
@@ -336,7 +336,7 @@ util.inherits(RedisClient, EventEmitter);
 主要功能就是初始化了变量，有两个关键的地方就是 create_parser 和 create_stream，前者用于处理解析 
 redis 返回的数据，后者用于处理 redis 连接的各种事件（connect, data, end, timeout, drain, error, close）
 
-```
+```js
 function create_parser (self) {
     return Parser({
         returnReply: function (data) {
@@ -371,7 +371,7 @@ function create_parser (self) {
 
 可以看到 parser 会抛出三个事件，返回 reply、返回错误、返回致命的错误。再来看 create_stream
 
-```
+```js
 RedisClient.prototype.create_stream = function () {
     var self = this;
     
@@ -462,7 +462,7 @@ RedisClient.prototype.create_stream = function () {
 
 可以看到，当 redis 返回数据的时候会调用 parse 的 execute 函数来处理数据，找到这个函数
 
-```
+```js
 HiredisReplyParser.prototype.parseData = function () {
     try {
         return this.reader.get();
@@ -491,7 +491,7 @@ execute 函数会解析数据并且根据返回的结果抛出不同的事件，
 正常返回会抛出 returnReply 事件，根据 create_parser 可以看到 returnReply 事件会调用 RedisClient 的
  return_reply 函数
  
- ```
+ ```js
  RedisClient.prototype.return_reply = function (reply) {
     
     // ...
@@ -513,7 +513,7 @@ execute 函数会解析数据并且根据返回的结果抛出不同的事件，
  
  先不管 pub sub 的情况，会继续调用 normal_reply 函数。normal_reply 会先从 command_queue 中取出 command，并且调用回调
  
- ```
+ ```js
  function normal_reply (self, reply) {
     var command_obj = self.command_queue.shift();
     if (typeof command_obj.callback === 'function') {
@@ -529,7 +529,7 @@ execute 函数会解析数据并且根据返回的结果抛出不同的事件，
  
  这样如何处理 redis 回复的消息就比较清楚了。再来看看如何处理 redis 连接的各种事件，先看 ready，找到 on_connect 函数
  
- ```
+ ```js
  RedisClient.prototype.on_connect = function () {
     debug('Stream connected ' + this.address + ' id ' + this.connection_id);
     
@@ -554,7 +554,7 @@ execute 函数会解析数据并且根据返回的结果抛出不同的事件，
  on_connect 函数会先更新状态，然后抛出事件，设置 no_ready_check 为 true 会先测试一下连接是否成功，
  类似 ping 操作，然后调用 on_ready 函数，如果设置为 false 会直接调用 on_ready 函数
  
- ```
+ ```js
  RedisClient.prototype.on_ready = function () {
     var self = this;
 
@@ -573,7 +573,7 @@ execute 函数会解析数据并且根据返回的结果抛出不同的事件，
 
 on_ready 函数最核心的是会调用 send_offline_queue 函数，发送保存在 offline_queue 的命令。
 
-```
+```js
 RedisClient.prototype.send_offline_queue = function () {
     for (var command_obj = this.offline_queue.shift(); command_obj; command_obj = this.offline_queue.shift()) {
         debug('Sending offline command: ' + command_obj.command);
@@ -585,7 +585,7 @@ RedisClient.prototype.send_offline_queue = function () {
 
 internal_send_command 函数遍历 offline_queue，internal_send_command 函数执行所有的命令
 
-```
+```js
 RedisClient.prototype.internal_send_command = function (command, args, callback, call_on_write) {
    
    // ...
@@ -625,7 +625,7 @@ internal_send_command是一个直接向 redis 发送命令的函数，其他的 
 中可以看到在 ready === false 时会调用 handle_offline_command 函数把命令保存进 offline_queue 中。关键的发送命令的
 函数为 write 函数。
 
-```
+```js
 RedisClient.prototype.write = function (data) {
     // 如果 pipeline === false，会直接调用 socket 发送数据。否则保存进 pipeline_queue
     if (this.pipeline === false) {
@@ -638,7 +638,7 @@ RedisClient.prototype.write = function (data) {
 
 这样发送命令的流程也已经清楚。再来看 on_error 函数
 
-```
+```js
 RedisClient.prototype.on_error = function (err) {
     if (this.closing) {
         return;
@@ -658,7 +658,7 @@ RedisClient.prototype.on_error = function (err) {
 
 on_error 函数会先更新状态，如果没有设置 retry_strategy 会向外抛出错误，最后调用 connection_gone 函数，end 和 close 事件也直接调用 connection_gone 函数进行重连操作
 
-```
+```js
 RedisClient.prototype.connection_gone = function (why, error) {
     // ...
     // ...
